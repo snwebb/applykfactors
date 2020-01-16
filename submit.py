@@ -17,14 +17,15 @@ def main():
    print 'START'
    print 
 
+   if subprocess.call(["voms-proxy-info",'--exists']) == 1:
+      print "Voms proxy does not exist:"
+      os.system("voms-proxy-init -voms cms -valid 96:00")
+   else:
+      print "Voms proxy exists"
+   print
+
    ##### loop for creating and sending jobs #####
    for x,cmd in enumerate(cmds):
-      if subprocess.call(["voms-proxy-info",'--exists']) == 1:
-         print "Voms proxy does not exist:"
-         os.system("voms-proxy-init -voms cms -valid 96:00")
-      else:
-         print "Voms proxy exists"
-      print
 
       ##### creates jobs #######
       with open('job_'+str(x)+'.sh', 'w') as fout:                  
@@ -54,8 +55,8 @@ def main():
 
          ###### sends bjobs ######
          #os.system("bsub -q "+queue+" -o logs job.sh")
-         os.system("qsub -cwd -q hep.q -l h_vmem=4G -l s_vmem=3.5G -l h_rt=1:0:0 -l s_rt=0:50:0 job_"+str(x)+".sh")
-         print "job nr " + str(x) + " submitted"
+      os.system("qsub -cwd -q hep.q -l h_vmem=4G -l s_vmem=3.5G -l h_rt=1:0:0 -l s_rt=0:50:0 job_"+str(x)+".sh")
+      print "job nr " + str(x) + " submitted"
 
 
    print
