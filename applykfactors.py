@@ -5,6 +5,7 @@ from array import *
 import sys
 import io
 import signal
+import yaml
 
 interruptLoop = False
 
@@ -34,7 +35,8 @@ def get_nominal_weight(event):
     weight *= event.VetoElectron_eventVetoW
     weight *= event.LooseMuon_eventVetoW
     weight *= event.puWeight
-    weight *= event.VLooseSITTau_eventVetoW
+    #    weight *= event.VLooseSITTau_eventVetoW
+    weight *= event.VLooseTau_eventVetoW
     weight *= event.MediumBJet_eventVetoW
 #    weight *= event.xs_weight
     weight *= event.genWeight
@@ -145,17 +147,27 @@ def getKFactorWeight(hist,bospt):
     
 
 def main(args):
- 
-    sampletype = args[1] 
-    infile = open(args[2], 'r')
 
-    signal.signal(signal.SIGINT, signal_handler)
+
+    signal.signal(signal.SIGINT, signal_handler) 
+    sampletype = args[1] 
+
+
+    with open(args[2], 'r') as f:
+        infile = yaml.load(f)
+
+#    infile = open(args[2], 'r')
+
+
 
     chain = TChain("Events")
-    files = infile.read().splitlines()
-    for filename in files:
+    for filename in infile["datasets"][0]["files"]:
         print(filename)
         chain.Add(filename)
+
+    #Get the normalisation (scale by xs/sum of weights, taken from yaml file)
+    norm = float(infile["datasets"][0]["xs"])/infile["datasets"][0]["nevents"]
+    
     
 
     systs = ["", "_Renorm_Up", "_Renorm_Down", "_Fact_Up", "_Fact_Down", "_PDF_Up", "_PDF_Down"]
@@ -184,9 +196,9 @@ def main(args):
         if ( entry%1000 == 0 ):
             print entry
         if ( pass_selection(event) ):
-
             bospt,mjj = get_gen_boson_jet(event)
             nomweight =  get_nominal_weight(event)
+            nomweight*=norm
 
             #Get NLO weight and apply based on pt and mjj
 
@@ -202,19 +214,12 @@ def main(args):
             for i,syst in enumerate(systs):
                 weights.append(getKFactorWeight(mjjhist[i],bospt))
             
-
-            # for i,syst in enumerate(systs):
-            #     weights.append(1)
-
             fill_hists(hists,weights,event.diCleanJet_M,nomweight)
-            #i=i+1
-            if (interruptLoop==True):
-                break
-            # if entry > 100000:
-            #     break;
-    save_hists(hists,args[3])
-#    print (i)
 
+        if (interruptLoop==True):
+            break
+
+    save_hists(hists,args[3])
 
 
 main(sys.argv)
