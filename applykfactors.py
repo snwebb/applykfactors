@@ -1,15 +1,20 @@
-#!/bin/python3
+#!/bin/python
 import ROOT
 from ROOT import *
 from array import *
 import sys
 import io
+import signal
 
+interruptLoop = False
 
+def signal_handler(sig, frame):
+    global interruptLoop
+    interruptLoop = True
 
 def make_hists(names,hists):    
     for name in names:
-        hist = ROOT.TH1D( "mjj_" + name , "", 100,0,1000)
+        hist = ROOT.TH1D( "mjj" + name , "", 100,0,1000)
         hists.append( hist )
 
 
@@ -19,7 +24,6 @@ def fill_hists(hists,weights,mjj,nominal_weight):
         hist.Fill(mjj,weight*nominal_weight)
 
 def save_hists(hists):    
-
     fout = ROOT.TFile("out2.root","RECREATE")
     for hist in hists:
         hist.Write()
@@ -50,10 +54,10 @@ def get_gen_boson_jet(event):
     lep1_isnu = False
     lep2_isnu = False
 
-    for part in range(len(event.pdgId)):
+    for part in range(len(event.GenPart_pdgId)):
         if ( (abs(event.GenPart_pdgId[part])>10 and abs(event.GenPart_pdgId[part]) < 17) and ( (event.GenPart_status[part] == 1 and (event.GenPart_statusFlags[part] & 0x1)>0) or ((event.GenPart_statusFlags[part] & 0x1)>0 and (event.GenPart_statusFlags[part] & 0x2)>0) ) ):
-            if (event.genPartIdxMother[part]>=0):
-                mother = event.genPartIdxMother[part]
+            if (event.GenPart_genPartIdxMother[part]>=0):
+                mother = event.GenPart_genPartIdxMother[part]
 
                 while True:
 
@@ -61,34 +65,35 @@ def get_gen_boson_jet(event):
                         boson_found = True
                         break
                     else:
-                        mother = mother.genPartIdxMother;
-                        if ( event.genPartIdxMother[mother] < 0  ):
+                        mother = event.GenPart_genPartIdxMother[mother];
+                        if ( mother < 0  ):
                             break
 
             if (boson_found):
-                boson_pt = event.pt[mother]
+                boson_pt = event.GenPart_pt[mother]
 
             if (event.GenPart_pdgId[part]>0):
-                lep1.SetPtEtaPhiM( GenPart_pt[part], GenPart_eta[part], GenPart_phi[part], GenPart_mass[part]  );
-                if ( abs(GenPart_GenPart_pdgId[part]) == 12 or abs(GenPart_GenPart_pdgId[part]) == 14 or abs(GenPart_GenPart_pdgId[part]) == 16):
+                lep1.SetPtEtaPhiM( event.GenPart_pt[part], event.GenPart_eta[part], event.GenPart_phi[part], event.GenPart_mass[part]  );
+                if ( abs(event.GenPart_pdgId[part]) == 12 or abs(event.GenPart_pdgId[part]) == 14 or abs(event.GenPart_pdgId[part]) == 16):
                     lep1_isnu = True
             else:
-                lep2.SetPtEtaPhiM( GenPart_pt[part], GenPart_eta[part], GenPart_phi[part], GenPart_mass[part]  );
-                if ( abs(GenPart_GenPart_pdgId[part]) == 12 or abs(GenPart_GenPart_pdgId[part]) == 14 or abs(GenPart_GenPart_pdgId[part]) == 16):
+                lep2.SetPtEtaPhiM( event.GenPart_pt[part], event.GenPart_eta[part], event.GenPart_phi[part], event.GenPart_mass[part]  );
+                if ( abs(event.GenPart_pdgId[part]) == 12 or abs(event.GenPart_pdgId[part]) == 14 or abs(event.GenPart_pdgId[part]) == 16):
                     lep2_isnu = True
 
 
     if (not boson_found):
-        boson_pt = (lep1.p4()+lep2.p4()).Pt()
+        boson_pt = (lep1+lep2).Pt()
         boson_found = True
 
 
 
 
-    jet = ROOT.TLorentzVector()
+
 
     jets = []
     for pt,eta,phi,m in zip(event.GenJet_pt,event.GenJet_eta,event.GenJet_phi,event.GenJet_mass):
+        jet = ROOT.TLorentzVector()
         jet.SetPtEtaPhiM(pt,eta,phi,m)
         if not lep1_isnu:
             if ( jet.DeltaR(lep1) < 0.4 ):
@@ -101,8 +106,15 @@ def get_gen_boson_jet(event):
         if (len(jets) == 2):
             break
 
-    mjj = (jets[0] + jets[1]).M()
+    if (len(jets) == 2): 
+        mjj = (jets[0] + jets[1]).M()
+    else:
+        mjj = 0
 
+    jet0 = ROOT.TLorentzVector()
+    jet1 = ROOT.TLorentzVector()
+    jet0.SetPtEtaPhiM(event.GenJet_pt[0],event.GenJet_eta[0],event.GenJet_phi[0],event.GenJet_mass[0])
+    jet1.SetPtEtaPhiM(event.GenJet_pt[1],event.GenJet_eta[1],event.GenJet_phi[1],event.GenJet_mass[1])
     
     return boson_pt,mjj
 
@@ -127,40 +139,82 @@ def pass_selection(event):
     else:
         return False
 
-chain = TChain("Events")
+def getKFactorWeight(hist,bospt):
+    weight = hist.GetBinContent(hist.FindBin(bospt))
+    return weight
+    
+
+def main(args):
+ 
+    sampletype = args[1] 
+    infile = open(args[2], 'r')
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    chain = TChain("Events")
+    files = infile.read().splitlines()
+    for filename in files:
+        print(filename)
+        chain.Add(filename)
+    
+
+    systs = ["", "_Renorm_Up", "_Renorm_Down", "_Fact_Up", "_Fact_Down", "_PDF_Up", "_PDF_Down"]
+    hists = []
+    make_hists(systs,hists)
+    #    load k-factors file
+    kfac_w = ROOT.TFile("kfactor_VBF_wjet.root","READ")
+    kfac_z = ROOT.TFile("kfactor_VBF_zjet.root","READ")
+    kfacfile = kfac_w
+    if ( sampletype == "z" ):
+        kfacfile = kfac_z
+    
+    kfac_200_500 = []
+    kfac_500_1000 = [] 
+    kfac_1000_1500 = []
+    kfac_1500_5000 = []
+
+    for syst in systs:
+        kfac_200_500.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_200_500"%(syst)))
+        kfac_500_1000.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_500_1000"%(syst)))
+        kfac_1000_1500.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_1000_1500"%(syst)))
+        kfac_1500_5000.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_1500_5000"%(syst)))
+
+    #i = 0
+    for entry,event in enumerate(chain):
+        if ( entry%1000 == 0 ):
+            print entry
+        if ( pass_selection(event) ):
+
+            bospt,mjj = get_gen_boson_jet(event)
+            nomweight =  get_nominal_weight(event)
+
+            #Get NLO weight and apply based on pt and mjj
+
+            mjjhist = kfac_200_500
+            if (mjj>500):
+                mjjhist = kfac_500_1000
+            if (mjj>1000):
+                mjjhist = kfac_1000_1500
+            if (mjj>1500):
+                mjjhist = kfac_1500_5000
+            weights = []            
+            
+            for i,syst in enumerate(systs):
+                weights.append(getKFactorWeight(mjjhist[i],bospt))
+            
+
+            # for i,syst in enumerate(systs):
+            #     weights.append(1)
+
+            fill_hists(hists,weights,event.diCleanJet_M,nomweight)
+            #i=i+1
+            if (interruptLoop==True):
+                break
+            # if entry > 100000:
+            #     break;
+    save_hists(hists)
+#    print (i)
 
 
-chain.Add("root://gfe02.grid.hep.ph.ic.ac.uk:1097///store/user/ebhal/CHIP_skim_mc_2018_20200104/DYJetsToLL_M-50_HT-400to600_TuneCP5_PSweights_13TeV-madgraphMLM-pythia8/crab_DYJetsToLL_M-50_HT-400to600_RunIIAutumn18NanoAODv5_ext2-v1/200104_215104/0000/tree_10.root")
 
-
-
-
-systs = ["Nominal", "Renorm_Up"]
-hists = []
-make_hists(systs,hists)
-
-
-i = 0
-for entry,event in enumerate(chain):
-    if ( entry%1000 == 0 ):
-        print entry
-    if ( pass_selection(event) ):
-
-        bospt,mjj = get_gen_boson_jet(event)
-
-        print (bospt,mjj)
-
-        nomweight =  get_nominal_weight(event)
-
-        #get weights list
-        weights = []
-        for i,syst in enumerate(systs):
-            weights.append(1)
-
-        fill_hists(hists,weights,event.diCleanJet_M,nomweight)
-        i=i+1
-
-    # if entry > 100000:
-    #     break;
-save_hists(hists)
-print (i)
+main(sys.argv)
