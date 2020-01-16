@@ -23,8 +23,8 @@ def fill_hists(hists,weights,mjj,nominal_weight):
     for hist, weight in zip(hists, weights):
         hist.Fill(mjj,weight*nominal_weight)
 
-def save_hists(hists):    
-    fout = ROOT.TFile("out2.root","RECREATE")
+def save_hists(hists,outputname):    
+    fout = ROOT.TFile(outputname,"RECREATE")
     for hist in hists:
         hist.Write()
 
@@ -212,7 +212,7 @@ def main(args):
                 break
             # if entry > 100000:
             #     break;
-    save_hists(hists)
+    save_hists(hists,args[3])
 #    print (i)
 
 
