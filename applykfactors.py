@@ -193,7 +193,7 @@ def main(args):
 
     #i = 0
     for entry,event in enumerate(chain):
-        if ( entry%1000 == 0 ):
+        if ( entry%10000 == 0 ):
             print entry
         if ( pass_selection(event) ):
             bospt,mjj = get_gen_boson_jet(event)
