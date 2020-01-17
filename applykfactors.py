@@ -15,7 +15,7 @@ def signal_handler(sig, frame):
 
 def make_hists(names,hists):    
     for name in names:
-        hist = ROOT.TH1D( "mjj" + name , "", 100,0,1000)
+        hist = ROOT.TH1D( "mjj" + name , "", 5000,0,5000)
         hists.append( hist )
 
 
@@ -150,6 +150,7 @@ def main(args):
 
 
     signal.signal(signal.SIGINT, signal_handler) 
+    signal.signal(signal.SIGUSR1, signal_handler) 
     sampletype = args[1] 
 
 
@@ -161,9 +162,11 @@ def main(args):
 
 
     chain = TChain("Events")
-    for filename in infile["datasets"][0]["files"]:
-        print(filename)
-        chain.Add(filename)
+    # for filename in infile["datasets"][0]["files"]:
+    #     print(filename)
+    #     chain.Add(filename)
+
+    chain.Add(args[3])
 
     #Get the normalisation (scale by xs/sum of weights, taken from yaml file)
     norm = float(infile["datasets"][0]["xs"])/infile["datasets"][0]["nevents"]
@@ -219,7 +222,7 @@ def main(args):
         if (interruptLoop==True):
             break
 
-    save_hists(hists,args[3])
+    save_hists(hists,args[4])
 
 
 main(sys.argv)
