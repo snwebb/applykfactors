@@ -55,7 +55,8 @@ def main():
     for y,inv in enumerate(inlist):
 
         vectorid = "w"
-        if (y==1) vectorid = "z"
+        if (y==1):
+            vectorid = "z"
         for v in inv:
 
             os.chdir(OutputDirBase)
@@ -69,7 +70,7 @@ def main():
 
                 ##### creates jobs #######
                 os.chdir( OutputDirBase + v + "/tmp/" )
-                with open('job_'+str(x)+'.sh', 'w') as fout:                  
+                with open('job_' + v + "_" + str(x)+'.sh', 'w') as fout:                  
 
                     fout.write("#!/bin/sh\n")
                     fout.write("echo\n")
@@ -92,19 +93,19 @@ def main():
                     fout.write("echo\n")
                     fout.write("echo\n")
 
-                os.system("chmod 755 job_"+str(x)+".sh")
+                os.system("chmod 755 job_" + v + "_" + str(x)+".sh")
 
                 ###### sends bjobs ######
-                os.system("qsub -cwd -q hep.q -l h_vmem=4G -l s_vmem=3.5G -l h_rt=2:0:0 -l s_rt=1:50:0 job_"+str(x)+".sh")
+                os.system("qsub -cwd -q hep.q -l h_vmem=4G -l s_vmem=3.5G -l h_rt=2:0:0 -l s_rt=1:50:0 job_"+ v + "_" + str(x)+".sh")
                 print "job nr " + str(x) + " submitted"
 
 
-            print
-            print "your jobs:"
-            os.system("qstat")
-            print
-            print 'END'
-            print
+    print
+    print "your jobs:"
+    os.system("qstat")
+    print
+    print 'END'
+    print
             
 
 if __name__ == '__main__':

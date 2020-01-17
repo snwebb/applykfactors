@@ -6,6 +6,7 @@ import sys
 import io
 import signal
 import yaml
+from array import array
 
 interruptLoop = False
 
@@ -13,9 +14,11 @@ def signal_handler(sig, frame):
     global interruptLoop
     interruptLoop = True
 
-def make_hists(names,hists):    
+def make_hists(names,hists):  
+
+    bins = array( 'f', [ 0, 200, 400, 600, 900, 1200, 1500, 2000, 2750, 3500, 5000 ] )
     for name in names:
-        hist = ROOT.TH1D( "mjj" + name , "", 5000,0,5000)
+        hist = ROOT.TH1D( "mjj" + name , "", 10, bins)
         hists.append( hist )
 
 
@@ -39,7 +42,7 @@ def get_nominal_weight(event):
     weight *= event.VLooseTau_eventVetoW
     weight *= event.MediumBJet_eventVetoW
 #    weight *= event.xs_weight
-    weight *= event.genWeight
+#    weight *= event.genWeight
 #    weight *= event.trigger_weight_METMHT2018
 
 
@@ -141,8 +144,23 @@ def pass_selection(event):
     else:
         return False
 
-def getKFactorWeight(hist,bospt):
+def getKFactorWeight(hist,bospt,syst,nom):
     weight = hist.GetBinContent(hist.FindBin(bospt))
+
+    #Apply ad-hoc correction for scales missing below 200 GeV pT
+    if ( bospt < 200 and 
+         (     
+             syst == "_Renorm_Up"
+             or syst == "_Renorm_Down"
+             or syst == "_Fact_Up"
+             or syst == "_Fact_Down"
+         )
+         
+    ):
+
+        difference220 = hist.GetBinContent(hist.FindBin(220))-nom.GetBinContent(nom.FindBin(220))
+        weight = difference220 + nom.GetBinContent(nom.FindBin(bospt))
+
     return weight
     
 
@@ -156,10 +174,6 @@ def main(args):
 
     with open(args[2], 'r') as f:
         infile = yaml.load(f)
-
-#    infile = open(args[2], 'r')
-
-
 
     chain = TChain("Events")
     # for filename in infile["datasets"][0]["files"]:
@@ -195,9 +209,10 @@ def main(args):
         kfac_1500_5000.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_1500_5000"%(syst)))
 
     #i = 0
+    totalEntries = str(chain.GetEntries())
     for entry,event in enumerate(chain):
         if ( entry%10000 == 0 ):
-            print entry
+            print (str(entry) + " / " + totalEntries)
         if ( pass_selection(event) ):
             bospt,mjj = get_gen_boson_jet(event)
             nomweight =  get_nominal_weight(event)
@@ -215,7 +230,7 @@ def main(args):
             weights = []            
             
             for i,syst in enumerate(systs):
-                weights.append(getKFactorWeight(mjjhist[i],bospt))
+                weights.append(getKFactorWeight(mjjhist[i],bospt,syst,mjjhist[0]))
             
             fill_hists(hists,weights,event.diCleanJet_M,nomweight)
 
