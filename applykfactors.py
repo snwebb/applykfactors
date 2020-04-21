@@ -16,9 +16,9 @@ def signal_handler(sig, frame):
 
 def make_hists(names,hists):  
 
-    bins = array( 'f', [ 0, 200, 400, 600, 900, 1200, 1500, 2000, 2750, 3500, 5000 ] )
+    bins = array( 'f', [ 200, 400, 600, 900, 1200, 1500, 2000, 2750, 3500, 5000 ] )
     for name in names:
-        hist = ROOT.TH1D( "mjj" + name , "", 10, bins)
+        hist = ROOT.TH1D( "mjj" + name , "", 9, bins)
         hists.append( hist )
 
 
@@ -125,18 +125,35 @@ def get_gen_boson_jet(event):
 
 def pass_selection(event):
 
+    # if ((event.HLT_PFMETNoMu120_PFMHTNoMu120_IDTight_PFHT60 == 1 or event.HLT_PFMETNoMu120_PFMHTNoMu120_IDTight)
+    #     and event.nLoosePhoton == 0
+    #     #        and event.met_filters_2018_mc
+    #     and event.MetNoLep_CleanJet_mindPhi > 0.5
+    #     and event.MetNoLep_pt  >= 250
+    #     and event.nCleanJet >= 2
+    #     and event.CleanJet_pt[0] > 80
+    #     and abs(event.CleanJet_eta[0]) < 5.0
+    #     and event.CleanJet_pt[1] > 40
+    #     and abs(event.CleanJet_eta[1]) < 5.0
+    #     and event.CleanJet_eta[0]*event.CleanJet_eta[1] < 0
+    #     and event.diCleanJet_M > 200
+    #     and event.diCleanJet_dPhi < 1.5
+    #     and abs(event.diCleanJet_dEta) > 1
+    # ):
+ 
     if ((event.HLT_PFMETNoMu120_PFMHTNoMu120_IDTight_PFHT60 == 1 or event.HLT_PFMETNoMu120_PFMHTNoMu120_IDTight)
         and event.nLoosePhoton == 0
         #        and event.met_filters_2018_mc
-        and event.MetNoLep_CleanJet_mindPhi > 0.5
-        and event.MetNoLep_pt  >= 250
+        and event.MetNoLep_CleanJet_mindPhi > 1.8
+        and event.MetNoLep_pt  >= 160
+        and event.MetNoLep_pt  < 250
         and event.nCleanJet >= 2
-        and event.CleanJet_pt[0] > 80
+        and event.CleanJet_pt[0] > 140
         and abs(event.CleanJet_eta[0]) < 5.0
-        and event.CleanJet_pt[1] > 40
+        and event.CleanJet_pt[1] > 70
         and abs(event.CleanJet_eta[1]) < 5.0
         and event.CleanJet_eta[0]*event.CleanJet_eta[1] < 0
-        and event.diCleanJet_M > 200
+        and event.diCleanJet_M > 900
         and event.diCleanJet_dPhi < 1.5
         and abs(event.diCleanJet_dEta) > 1
     ):
@@ -171,16 +188,16 @@ def main(args):
     signal.signal(signal.SIGUSR1, signal_handler) 
     sampletype = args[1] 
 
-
+    #print (sampletype)
     with open(args[2], 'r') as f:
         infile = yaml.load(f)
 
     chain = TChain("Events")
-    # for filename in infile["datasets"][0]["files"]:
-    #     print(filename)
-    #     chain.Add(filename)
+    for filename in infile["datasets"][0]["files"]:
+        print(filename)
+        chain.Add(filename)
 
-    chain.Add(args[3])
+    #chain.Add(args[3])
 
     #Get the normalisation (scale by xs/sum of weights, taken from yaml file)
     norm = float(infile["datasets"][0]["xs"])/infile["datasets"][0]["nevents"]
@@ -191,8 +208,10 @@ def main(args):
     hists = []
     make_hists(systs,hists)
     #    load k-factors file
-    kfac_w = ROOT.TFile("kfactor_VBF_wjet.root","READ")
-    kfac_z = ROOT.TFile("kfactor_VBF_zjet.root","READ")
+    kfac_w = ROOT.TFile("20200325/2Dkfactor_VBF_wjet.root","READ")
+    kfac_z = ROOT.TFile("20200325/2Dkfactor_VBF_zjet.root","READ")
+    # kfac_w = ROOT.TFile("kfactor_VTR_wjet.root","READ")
+    # kfac_z = ROOT.TFile("kfactor_VTR_zjet.root","READ")
     kfacfile = kfac_w
     if ( sampletype == "z" ):
         kfacfile = kfac_z
@@ -203,10 +222,13 @@ def main(args):
     kfac_1500_5000 = []
 
     for syst in systs:
-        kfac_200_500.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_200_500"%(syst)))
-        kfac_500_1000.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_500_1000"%(syst)))
-        kfac_1000_1500.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_1000_1500"%(syst)))
-        kfac_1500_5000.append(kfacfile.Get("kfactors_shape%s/kfactor_vbf_mjj_1500_5000"%(syst)))
+        #kfac_200_500.append(kfacfile.Get("kfactors_shape%s/kfactor_VTR_boson_pt"%(syst)))
+        hist = kfacfile.Get("kfactors_shape%s/kfactor_vbf"%(syst))
+        
+        kfac_200_500.append( hist.ProjectionX(str(syst) + "_200_500",2,2) )
+        kfac_500_1000.append( hist.ProjectionX(str(syst) + "_500_1000",3,3) )
+        kfac_1000_1500.append( hist.ProjectionX(str(syst) + "_1000_1500",4,4) )
+        kfac_1500_5000.append( hist.ProjectionX(str(syst) + "_1500_5000",5,5) )
 
     #i = 0
     totalEntries = str(chain.GetEntries())
